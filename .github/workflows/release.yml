@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'version.json'
   workflow_dispatch:
 
 permissions:
@@ -60,8 +58,16 @@ jobs:
           chmod +x gradlew scripts/build_all_apks.sh
           ./scripts/build_all_apks.sh --release
 
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmniverseUniversal-APKs
+          path: output/*.apk
+          retention-days: 30
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
+        if: success()
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.name }}

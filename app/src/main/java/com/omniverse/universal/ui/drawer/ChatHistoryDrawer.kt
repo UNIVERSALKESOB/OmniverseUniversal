@@ -830,7 +830,8 @@ fun ChatHistoryDrawer(
                     listOf<Pair<com.omniverse.universal.domain.model.AgentKind?, String>>(
                         null to "All",
                         com.omniverse.universal.domain.model.AgentKind.AGY to "Antigravity",
-                        com.omniverse.universal.domain.model.AgentKind.CLAUDE to "Claude"
+                        com.omniverse.universal.domain.model.AgentKind.CLAUDE to "Claude",
+                        com.omniverse.universal.domain.model.AgentKind.OPEN_SOURCE to "Open Source"
                     ).forEach { (agent, label) ->
                         val selected = agentFilter == agent
                         val accent = agent?.accent() ?: ClaudeTerracotta

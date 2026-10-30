@@ -29,14 +29,19 @@ val ClaudeAccent = Color(0xFFD97757)
 /** Antigravity's color across the app (same blue as its settings group). */
 val AgyAccent = Color(0xFF3B82F6)
 
+/** Open-source / local model accent (emerald green). */
+val OpenSourceAccent = Color(0xFF10B981)
+
 fun AgentKind.label(): String = when (this) {
     AgentKind.AGY -> "Antigravity"
     AgentKind.CLAUDE -> "Claude Code"
+    AgentKind.OPEN_SOURCE -> "Open Source"
 }
 
 fun AgentKind.accent(): Color = when (this) {
     AgentKind.AGY -> AgyAccent
     AgentKind.CLAUDE -> ClaudeAccent
+    AgentKind.OPEN_SOURCE -> OpenSourceAccent
 }
 
 /**

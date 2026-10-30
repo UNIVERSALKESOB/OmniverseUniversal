@@ -3,10 +3,9 @@
   "version_name": "1.0.15",
   "min_supported_version_code": 1,
   "changelog": [
-    "Added real browser user agent for inbuilt webview browser to avoid issue related to google sign in.(Not sure if it works)",
-    "Added CUSTOM API KEY support for claude agent(check in settings for claude in app)",
-    "Added support for git clone passing repo(in new chat in choosing project)",
-    "Fixed analytics initialization causing to show many repeated users"
+    "Omniverse Universal: Independent rebrand with standalone application package",
+    "Open-Source AI integration: Local Ollama / open-source models support",
+    "Enhanced native terminal and local developer environment"
   ],
   "is_critical": false
 }
