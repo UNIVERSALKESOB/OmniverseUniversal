@@ -214,11 +214,22 @@ object LocalServerManager {
         }
         val tzOffset = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 1000
 
-        val binParam = if (agyCmd.isNotBlank()) {
-            " --bin \"$agyCmd\""
-        } else {
-            ""
+        // Only pass --bin when the AGY binary actually exists on disk.
+        // On a fresh Ubuntu install /root/.local/bin/agy won't be present yet;
+        // passing a missing path causes agy_ide_bridge to exit(1) immediately.
+        val agyBinaryExists = agyCmd.isNotBlank() && run {
+            val resolved = if (!com.omniverse.universal.data.local.LocalEnvironmentManager.isTermuxPackage(context)) {
+                // Ubuntu/standard mode: agy path is absolute inside the rootfs
+                val ubuntuRoot = com.omniverse.universal.data.local.LocalEnvironmentManager.getUbuntuRootDir(context)
+                java.io.File(ubuntuRoot, agyCmd.removePrefix("/"))
+            } else {
+                // Termux mode: tilde-paths resolve under $HOME
+                val homeDir = com.omniverse.universal.data.local.LocalEnvironmentManager.getHomeDir(context)
+                java.io.File(homeDir, agyCmd.removePrefix("~/"))
+            }
+            resolved.exists()
         }
+        val binParam = if (agyBinaryExists) " --bin \"$agyCmd\"" else ""
         val claudeCmd = authPrefs.getClaudeBinaryPathSync().trim()
         val claudeBinParam = if (claudeCmd.isNotBlank() && com.omniverse.universal.domain.model.AgentKind.CLAUDE in com.omniverse.universal.data.agent.AgentPreferences.enabledSync(context)) {
             " --claude-bin \"$claudeCmd\""

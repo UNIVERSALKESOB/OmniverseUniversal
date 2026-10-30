@@ -1,11 +1,11 @@
 {
-  "version_code": 115,
-  "version_name": "1.0.15",
+  "version_code": 116,
+  "version_name": "1.0.16",
   "min_supported_version_code": 1,
   "changelog": [
-    "Omniverse Universal: Independent rebrand with standalone application package",
-    "Open-Source AI integration: Local Ollama / open-source models support",
-    "Enhanced native terminal and local developer environment"
+    "Critical fix: bridge no longer crashes when AGY binary is absent on fresh Ubuntu install",
+    "Open-Source AI routing: messages, conversations, and streaming correctly routed through Ollama backend",
+    "Improved stability: agy_ide_bridge runs in open-source mode when hub binary not found"
   ],
-  "is_critical": false
+  "is_critical": true
 }

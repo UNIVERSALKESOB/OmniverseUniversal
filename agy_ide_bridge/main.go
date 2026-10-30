@@ -245,8 +245,8 @@ func main() {
 
 	resolvedAgyBin, err := hub.ResolveAgyBinaryInteractive(customAgyBin, forceStart || skipHub)
 	if customAgyBin != "" && err != nil {
-		fmt.Printf(" \033[1;31m✗ Fatal Error:\033[0m %v\n", err)
-		os.Exit(1)
+		fmt.Printf(" \033[33m[!] AGY binary not found at '%s': %v (running bridge without Hub — Omniverse open-source mode)\033[0m\n", customAgyBin, err)
+		skipHub = true
 	}
 	if err != nil && !skipHub {
 		fmt.Printf(" \033[31m[!] AGY Discovery Warning:\033[0m %v\n", err)

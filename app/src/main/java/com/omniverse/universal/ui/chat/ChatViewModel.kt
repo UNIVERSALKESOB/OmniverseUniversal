@@ -61,7 +61,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val agyHubClient get() = agyBackend.agyHubClient
     private val agyBridgeService get() = agyBackend.agyBridgeService
 
-    // ==================== AGENT ROUTING (Antigravity / Claude Code) ====================
+    // ==================== AGENT ROUTING (Antigravity / Claude Code / Open Source) ====================
 
     val claudePrefs = com.omniverse.universal.data.agent.claude.ClaudePreferences(application)
     private val claudeClient = com.omniverse.universal.data.agent.claude.ClaudeBridgeClient()
@@ -73,12 +73,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Dictation for Claude chats (Claude's speech-to-text through the bridge). */
     val claudeVoice = com.omniverse.universal.data.agent.claude.ClaudeVoiceTranscriber(claudeClient) { claudePrefs.voiceLanguage.value }
 
+    /** Free local / open-source AI backend (Ollama, llama.cpp, etc.) — no subscription required. */
+    val ollamaBackend = com.omniverse.universal.data.agent.opensource.OllamaChatBackend()
+
     /** Agent of the conversation on screen; chat actions go to that agent's backend. */
     val activeAgent: StateFlow<AgentKind> = store.currentConversation
         .map { it?.agent ?: AgentKind.AGY }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AgentKind.AGY)
 
     private val isClaudeActive get() = store.currentConversation.value?.agent == AgentKind.CLAUDE
+    private val isOpenSourceActive get() = store.currentConversation.value?.agent == AgentKind.OPEN_SOURCE
 
     /** Agent used for new chats, picked on the empty chat screen (remembered). */
     val newChatAgent: StateFlow<AgentKind> = claudePrefs.newChatAgent
@@ -137,6 +141,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         combine(store.currentConversation, agy, claude) { conv, a, c -> if (conv?.agent == AgentKind.CLAUDE) c else a }
             .stateIn(viewModelScope, SharingStarted.Eagerly, agy.value)
 
+    private fun <T> byAgent(agy: StateFlow<T>, claude: StateFlow<T>, openSource: StateFlow<T>): StateFlow<T> =
+        combine(store.currentConversation, agy, claude, openSource) { conv, a, c, os ->
+            when (conv?.agent) {
+                AgentKind.CLAUDE -> c
+                AgentKind.OPEN_SOURCE -> os
+                else -> a
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, agy.value)
+
     private fun isoUtc(epochSeconds: Long): String =
         java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
             .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
@@ -168,7 +181,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val isConversationsLoading = agyBackend.isConversationsLoading
     val artifacts = agyBackend.artifacts
     val pendingApprovals = agyBackend.pendingApprovals
-    val isStreaming = byAgent(agyBackend.isStreaming, claudeBackend.isStreaming)
+    val isStreaming = byAgent(agyBackend.isStreaming, claudeBackend.isStreaming, ollamaBackend.isStreaming)
     val availableModels = byAgent(agyBackend.availableModels, claudeBackend.availableModels)
     val enabledModelIds = agyBackend.enabledModelIds
     val enabledModels = byAgent(agyBackend.enabledModels, claudeBackend.availableModels)
@@ -195,9 +208,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val quotas = byAgent(agyBackend.quotas, claudeQuotas)
+    val quotas = byAgent(agyBackend.quotas, claudeQuotas, noQuotas)
     val quotaSummary = agyBackend.quotaSummary
-    val isLoadingConversation = byAgent(agyBackend.isLoadingConversation, claudeBackend.isLoadingConversation)
+    val isLoadingConversation = byAgent(agyBackend.isLoadingConversation, claudeBackend.isLoadingConversation, ollamaBackend.isLoadingConversation)
     fun setModelEnabled(modelId: String, isEnabled: Boolean) = agyBackend.setModelEnabled(modelId, isEnabled)
     fun enableAllModels() = agyBackend.enableAllModels()
     val bridgeStatusMessage = agyBackend.bridgeStatusMessage
@@ -244,38 +257,76 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /** New chat with [agent] (e.g. `/clear` in a Claude chat), without changing the new-chat default. */
     fun startNewChat(agent: AgentKind) {
-        if (agent == AgentKind.CLAUDE) {
-            agyBackend.detach()
-            claudeBackend.startNewChat()
-        } else {
-            claudeBackend.detach()
-            agyBackend.startNewChat()
+        when (agent) {
+            AgentKind.CLAUDE -> {
+                agyBackend.detach()
+                ollamaBackend.stopStreaming()
+                claudeBackend.startNewChat()
+            }
+            AgentKind.OPEN_SOURCE -> {
+                agyBackend.detach()
+                claudeBackend.detach()
+                ollamaBackend.startNewChat()
+            }
+            else -> {
+                claudeBackend.detach()
+                ollamaBackend.stopStreaming()
+                agyBackend.startNewChat()
+            }
         }
     }
     fun selectConversation(id: String) {
-        if (agentOf(id) == AgentKind.CLAUDE) {
-            agyBackend.detach()
-            claudeBackend.selectConversation(id)
-        } else {
-            claudeBackend.detach()
-            agyBackend.selectConversation(id)
+        when (agentOf(id)) {
+            AgentKind.CLAUDE -> {
+                agyBackend.detach()
+                ollamaBackend.stopStreaming()
+                claudeBackend.selectConversation(id)
+            }
+            AgentKind.OPEN_SOURCE -> {
+                agyBackend.detach()
+                claudeBackend.detach()
+                ollamaBackend.selectConversation(id)
+            }
+            else -> {
+                claudeBackend.detach()
+                ollamaBackend.stopStreaming()
+                agyBackend.selectConversation(id)
+            }
         }
     }
     fun startPersistentStream(conversationId: String) = agyBackend.startPersistentStream(conversationId)
-    fun deleteConversation(id: String) = if (agentOf(id) == AgentKind.CLAUDE) claudeBackend.deleteConversation(id) else agyBackend.deleteConversation(id)
+    fun deleteConversation(id: String) = when (agentOf(id)) {
+        AgentKind.CLAUDE -> claudeBackend.deleteConversation(id)
+        AgentKind.OPEN_SOURCE -> ollamaBackend.deleteConversation(id)
+        else -> agyBackend.deleteConversation(id)
+    }
     fun forkConversation(id: String) {
-        if (agentOf(id) == AgentKind.CLAUDE) {
-            agyBackend.detach()
-            claudeBackend.forkConversation(id)
-        } else {
-            agyBackend.forkConversation(id)
+        when (agentOf(id)) {
+            AgentKind.CLAUDE -> {
+                agyBackend.detach()
+                claudeBackend.forkConversation(id)
+            }
+            AgentKind.OPEN_SOURCE -> {
+                agyBackend.detach()
+                claudeBackend.detach()
+                ollamaBackend.forkConversation(id)
+            }
+            else -> agyBackend.forkConversation(id)
         }
     }
     fun selectModel(modelId: String) = if (isClaudeActive) claudeBackend.selectModel(modelId) else agyBackend.selectModel(modelId)
-    fun sendMessage(content: String) = if (isClaudeActive) claudeBackend.sendMessage(content) else agyBackend.sendMessage(content)
+    fun sendMessage(content: String) = when {
+        isOpenSourceActive -> ollamaBackend.sendMessage(content)
+        isClaudeActive -> claudeBackend.sendMessage(content)
+        else -> agyBackend.sendMessage(content)
+    }
     val isTranscribingAudio = agyBackend.isTranscribingAudio
     fun transcribeAudioFile(file: java.io.File, onDone: (String) -> Unit, onError: (String) -> Unit) = agyBackend.transcribeAudioFile(file, onDone, onError)
-    fun retryMessage(messageId: String) = if (isClaudeActive) claudeBackend.regenerate(messageId) else agyBackend.retryMessage(messageId)
+    fun retryMessage(messageId: String) = when {
+        isOpenSourceActive -> { /* open-source re-sends are not supported in this version */ }
+        isClaudeActive -> claudeBackend.regenerate(messageId)
+        else -> agyBackend.retryMessage(messageId)
+    }
     fun prepareEditMessage(messageId: String): String? {
         if (isClaudeActive) {
             claudeNotSupported("Editing a sent message")
@@ -295,7 +346,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun renameConversation(id: String, title: String) {
         if (agentOf(id) == AgentKind.CLAUDE) claudeBackend.renameConversation(id, title)
     }
-    fun stopStreaming() = if (isClaudeActive) claudeBackend.stopStreaming() else agyBackend.stopStreaming()
+    fun stopStreaming() = when {
+        isOpenSourceActive -> ollamaBackend.stopStreaming()
+        isClaudeActive -> claudeBackend.stopStreaming()
+        else -> agyBackend.stopStreaming()
+    }
     fun applyQuotaSummary(summary: com.omniverse.universal.domain.model.QuotaSummaryResponse) = agyBackend.applyQuotaSummary(summary)
     fun refreshQuotas(force: Boolean = true, showToastFeedback: Boolean = false) {
         if (isClaudeActive) {
@@ -381,10 +436,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private val _conversations = store.conversations
-    /** Sidebar list: Antigravity and Claude Code conversations together, newest first. */
-    val conversations: StateFlow<List<Conversation>> = combine(_conversations, claudeBackend.conversations, enabledAgents) { agy, claude, enabled ->
+    /** Sidebar list: Antigravity, Claude Code, and Open Source conversations together, newest first. */
+    val conversations: StateFlow<List<Conversation>> = combine(_conversations, claudeBackend.conversations, ollamaBackend.conversations, enabledAgents) { agy, claude, openSource, enabled ->
         // a disabled agent's chats stay on disk but are not listed
-        ((if (AgentKind.AGY in enabled) agy else emptyList()) + (if (AgentKind.CLAUDE in enabled) claude else emptyList()))
+        ((if (AgentKind.AGY in enabled) agy else emptyList()) +
+         (if (AgentKind.CLAUDE in enabled) claude else emptyList()) +
+         (if (AgentKind.OPEN_SOURCE in enabled) openSource else emptyList()))
             .sortedByDescending { it.updatedAt }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -410,10 +467,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         requestedViewMode.value = null
     }
 
-    /** Antigravity's chat state (shared store); Claude Code keeps its own, see [messages]. */
+    /** Antigravity's chat state (shared store); Claude Code and Open Source keep their own, see [messages]. */
     private val _messages = store.messages
     /** Messages of the chat on screen, from the agent that owns it. */
-    val messages: StateFlow<List<ChatMessage>> = byAgent(_messages, claudeBackend.messages)
+    val messages: StateFlow<List<ChatMessage>> = byAgent(_messages, claudeBackend.messages, ollamaBackend.messages)
 
     private val _thinkingPreference = MutableStateFlow(com.omniverse.universal.domain.model.ThinkingPreference())
     val thinkingPreference: StateFlow<com.omniverse.universal.domain.model.ThinkingPreference> = _thinkingPreference.asStateFlow()
