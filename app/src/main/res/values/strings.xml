@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Omniverse Universal</string>
+    <string name="anti_term_name">OmniTerminal</string>
+    <string name="termux_name">OmniLinux</string>
+    <string name="accessibility_service_name">Omniverse AI Automation</string>
+    <string name="accessibility_service_description">Enables Omniverse Universal AI Assistant to inspect the screen, tap buttons, scroll, input text, and automate tasks natively on your device.</string>
+    <string name="copy_text">Copy</string>
+    <string name="paste_text">Paste</string>
+    <string name="text_selection_more">More</string>
+    <string name="select_all">Select All</string>
+    <string name="share_text">Share</string>
+    <string name="select_url">Select URL</string>
+    <string name="share_transcript">Share Transcript</string>
+    <string name="reset_terminal">Reset Terminal</string>
+    <string name="no_urls_found">No URLs found in transcript</string>
+</resources>
